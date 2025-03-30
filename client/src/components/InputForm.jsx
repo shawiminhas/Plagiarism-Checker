@@ -11,31 +11,75 @@ export default function InputForm() {
 	const [text, setText] = useState("");
 	const [api, contextHolder] = notification.useNotification();
 
+	async function checkForPlagiarism() {
+		try {
+			const response = await fetch("http://localhost:5000/check-plagiarism", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Access-Control-Allow-Origin": "*",
+				},
+				body: JSON.stringify({ content: text }),
+			});
+
+			if (!response.ok) {
+				throw new Error(`Error checking for plagiarism: ${response.status}`);
+			}
+
+			const data = await response.json();
+			console.log(data);
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
+	function insufficientWordError(numberOfWords, minimumWords) {
+		api.error({
+			message: "Insufficient Word Count",
+			description: `Your input contains ${numberOfWords} ${
+				numberOfWords !== 1 ? "words" : "word"
+			}. A minimum of ${minimumWords} words is required. You need ${minimumWords - numberOfWords} more ${
+				minimumWords - numberOfWords === 1 ? "word" : "words"
+			} to proceed.`,
+			pauseOnHover: true,
+		});
+	}
+
+	function insufficientCharacterError(numberOfCharacters, minimumCharacters) {
+		api.error({
+			message: "Insufficient Character Count",
+			description: `Your input contains ${numberOfCharacters} ${
+				numberOfCharacters === 1 ? "character" : "characters"
+			}. A minimum of ${minimumCharacters} characters is required. You need 
+			${minimumCharacters - numberOfCharacters} more ${
+				minimumCharacters - numberOfCharacters === 1 ? "character" : "characters"
+			} to proceed.`,
+			pauseOnHover: true,
+		});
+	}
+
+	function handleSubmit(e) {
+		e.preventDefault();
+		validateForm();
+	}
+
 	function validateForm() {
 		const minimumWords = 40;
 		const minimumCharacters = 200;
 		const numberOfWords = text.split(" ").length;
 		const numberOfCharacters = text.length;
 
-		if (numberOfWords < minimumWords) {
-			api.error({
-				message: "Insufficient Word Count",
-				description: `Your input contains only ${numberOfWords} words. A minimum of ${minimumWords} words is required. You need ${
-					minimumWords - numberOfWords
-				} more words to proceed.`,
-				pauseOnHover: true,
-			});
+		if (!text.trim()) {
+			insufficientWordError(0, minimumWords);
+			return;
+		} else if (numberOfWords < minimumWords) {
+			insufficientWordError(numberOfWords, minimumWords);
 			return;
 		} else if (numberOfCharacters < minimumCharacters) {
-			api.error({
-				message: "Insufficient Character Count",
-				description: `Your input contains only ${numberOfCharacters} characters. A minimum of ${minimumCharacters} characters is required. You need ${
-					minimumCharacters - numberOfCharacters
-				} more characters to proceed.`,
-				pauseOnHover: true,
-			});
+			insufficientCharacterError(numberOfCharacters, minimumCharacters);
 			return;
 		} else {
+			checkForPlagiarism();
 			// send content to backend
 		}
 	}
@@ -95,6 +139,7 @@ export default function InputForm() {
 			}
 		} else {
 			setSelectedFileName("");
+			setText("");
 		}
 	}
 
@@ -103,7 +148,7 @@ export default function InputForm() {
 			{contextHolder}
 			<form
 				className="flex flex-col items-center p-8 m-20 bg-slate-100 rounded-lg shadow-lg w-full max-w-2xl"
-				action={validateForm}>
+				onSubmit={handleSubmit}>
 				<textarea
 					value={text}
 					onChange={(e) => setText(e.target.value)}
