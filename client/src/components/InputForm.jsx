@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { notification } from "antd";
 import mammoth from "mammoth";
+import axios from "axios";
+import PlagiarismCheckButton from "./PlagiarismCheckButton";
+import FileUploader from "./FileUploader";
+import DownloadReportButton from "./DownloadReportButton";
 
 function isValidFileExtension(fileExtension) {
 	return ["doc", "docx", "txt"].includes(fileExtension);
@@ -10,52 +14,73 @@ export default function InputForm() {
 	const [selectedFileName, setSelectedFileName] = useState("");
 	const [text, setText] = useState("");
 	const [api, contextHolder] = notification.useNotification();
+	const [checkingForPlagiarism, setCheckingForPlagiarism] = useState(false);
+	const [plagiarismBlob, setPlagiarismBlob] = useState(null);
 
-	async function checkForPlagiarism() {
+	async function fetchPlagiarismPDF() {
 		try {
-			const response = await fetch("http://localhost:5000/check-plagiarism", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Access-Control-Allow-Origin": "*",
-				},
-				body: JSON.stringify({ content: text }),
-			});
+			setCheckingForPlagiarism(true);
+			const response = await axios.post(
+				"http://localhost:5000/check-plagiarism",
+				{ content: text },
+				{
+					responseType: "blob",
+					headers: { "Content-Type": "application/json" },
+				}
+			);
 
-			if (!response.ok) {
+			if (response.status < 200 || response.status >= 300) {
 				throw new Error(`Error checking for plagiarism: ${response.status}`);
 			}
 
-			const data = await response.json();
-			console.log(data);
+			const contentType = response.headers["content-type"];
+			if (!contentType || !contentType.includes("application/pdf")) {
+				throw new Error("Invalid response type, expected a PDF.");
+			}
+
+			const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+			setPlagiarismBlob(pdfBlob);
+
+			const message = "Successfully Generated Plagiarism Report";
+			const description = "Press below to generate your plagiarism report.";
+			showNotification(message, description, "success");
 		} catch (e) {
+			unableToGeneratePDFError();
 			console.error(e);
+		} finally {
+			setCheckingForPlagiarism(false);
 		}
 	}
 
+	function showNotification(title, description, type) {
+		api[type]({ message: title, description, pauseOnHover: true });
+	}
+
 	function insufficientWordError(numberOfWords, minimumWords) {
-		api.error({
-			message: "Insufficient Word Count",
-			description: `Your input contains ${numberOfWords} ${
-				numberOfWords !== 1 ? "words" : "word"
-			}. A minimum of ${minimumWords} words is required. You need ${minimumWords - numberOfWords} more ${
-				minimumWords - numberOfWords === 1 ? "word" : "words"
-			} to proceed.`,
-			pauseOnHover: true,
-		});
+		const message = "Insufficient Word Count";
+		const description = `Your input contains ${numberOfWords} ${
+			numberOfWords !== 1 ? "words" : "word"
+		}. A minimum of ${minimumWords} words is required. You need ${minimumWords - numberOfWords} more ${
+			minimumWords - numberOfWords === 1 ? "word" : "words"
+		} to proceed.`;
+		showNotification(message, description, "error");
+	}
+
+	function unableToGeneratePDFError() {
+		const message = "Unable To Generate Plagiarism Report";
+		const description = "Currently unable to generate plagiarism report at this time, please try again later.";
+		showNotification(message, description, "error");
 	}
 
 	function insufficientCharacterError(numberOfCharacters, minimumCharacters) {
-		api.error({
-			message: "Insufficient Character Count",
-			description: `Your input contains ${numberOfCharacters} ${
-				numberOfCharacters === 1 ? "character" : "characters"
-			}. A minimum of ${minimumCharacters} characters is required. You need 
+		const message = "Insufficient Character Count";
+		const description = `Your input contains ${numberOfCharacters} ${
+			numberOfCharacters === 1 ? "character" : "characters"
+		}. A minimum of ${minimumCharacters} characters is required. You need 
 			${minimumCharacters - numberOfCharacters} more ${
-				minimumCharacters - numberOfCharacters === 1 ? "character" : "characters"
-			} to proceed.`,
-			pauseOnHover: true,
-		});
+			minimumCharacters - numberOfCharacters === 1 ? "character" : "characters"
+		} to proceed.`;
+		showNotification(message, description, "error");
 	}
 
 	function handleSubmit(e) {
@@ -79,8 +104,7 @@ export default function InputForm() {
 			insufficientCharacterError(numberOfCharacters, minimumCharacters);
 			return;
 		} else {
-			checkForPlagiarism();
-			// send content to backend
+			fetchPlagiarismPDF();
 		}
 	}
 
@@ -88,11 +112,9 @@ export default function InputForm() {
 		const reader = new FileReader();
 
 		reader.onerror = () => {
-			api.error({
-				message: "Unable to Read File",
-				description: "There was an error reading the file. Please try again later.",
-				pauseOnHover: true,
-			});
+			const message = "Unable to Read File";
+			const description = "There was an error reading the file. Please try again later.";
+			showNotification(message, description, "error");
 		};
 
 		if (fileExtension === "txt") {
@@ -110,11 +132,9 @@ export default function InputForm() {
 					const fileContent = result.value;
 					setText(fileContent);
 				} catch (e) {
-					api.error({
-						message: "File Processing Error",
-						description: "Unable to process the file. Please try again later.",
-						pauseOnHover: true,
-					});
+					const message = "File Processing Error";
+					const description = "Unable to process the file. Please try again later.";
+					showNotification(message, description, "error");
 				}
 			};
 
@@ -124,23 +144,32 @@ export default function InputForm() {
 
 	function handleFileChange(e) {
 		const file = e.target.files[0];
-		if (file) {
-			const fileName = file.name;
-			const fileExtension = fileName.split(".").pop().toLowerCase();
-			if (isValidFileExtension(fileExtension)) {
-				readFileContent(file, fileExtension);
-				setSelectedFileName(fileName);
-			} else {
-				api.error({
-					message: "Unsupported File Type",
-					description: "Error: Unsupported file type. Only .docx, .doc, and .txt files are allowed.",
-					pauseOnHover: true,
-				});
-			}
-		} else {
+
+		if (!file) {
 			setSelectedFileName("");
 			setText("");
+			setPlagiarismBlob(null);
+			return;
 		}
+
+		const fileName = file.name;
+		const fileExtension = fileName.split(".").pop().toLowerCase();
+
+		if (!isValidFileExtension(fileExtension)) {
+			const message = "Unsupported File Type";
+			const description = "Error: Unsupported file type. Only .docx, .doc, and .txt files are allowed.";
+			showNotification(message, description, "error");
+			return;
+		}
+
+		readFileContent(file, fileExtension);
+		setSelectedFileName(fileName);
+		setPlagiarismBlob(null);
+	}
+
+	function handleTextAreaChange(e) {
+		setText(e.target.value);
+		setPlagiarismBlob(null);
 	}
 
 	return (
@@ -151,22 +180,14 @@ export default function InputForm() {
 				onSubmit={handleSubmit}>
 				<textarea
 					value={text}
-					onChange={(e) => setText(e.target.value)}
+					onChange={handleTextAreaChange}
 					className="w-full h-40 p-4 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
 					placeholder="Enter text or upload file to check for plagiarism"></textarea>
-				<div className="flex gap-4 mt-6 w-full justify-center">
-					<button
-						type="submit"
-						className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition cursor-pointer">
-						Check for Plagiarism
-					</button>
-					<label
-						className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition cursor-pointer flex items-center justify-center"
-						htmlFor="file-upload">
-						{selectedFileName || "Choose File"}
-						<input id="file-upload" className="hidden" type="file" onChange={handleFileChange} />
-					</label>
+				<div className="flex gap-4 m-6 w-full justify-center">
+					<PlagiarismCheckButton checkingForPlagiarism={checkingForPlagiarism} onClick={handleSubmit} />
+					<FileUploader selectedFileName={selectedFileName} handleFileChange={handleFileChange} />
 				</div>
+				{plagiarismBlob && <DownloadReportButton plagiarismBlob={plagiarismBlob} showNotification={showNotification} />}
 			</form>
 		</>
 	);
