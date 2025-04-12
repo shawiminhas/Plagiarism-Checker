@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify  # type: ignore
+from flask import Flask, request, jsonify, send_file, after_this_request  # type: ignore
 from flask_cors import CORS  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 import os
+from pdf_generator import generate_pdf
 import requests
 
 load_dotenv()
@@ -12,6 +13,35 @@ CORS(app)
 
 @app.route("/check-plagiarism", methods=["POST"])
 def check_plagiarism():
+    """
+    Checks for plagiarism.
+
+    This route accepts json payload containing content to analyze for plagiarism.
+    Content must be at least 200 characters and 40 words.
+
+    Request Body (PDF file):
+        {
+            "content": "Lorem Ipsum is simply dummy text of the printing and typesetting industry."
+        }
+
+    Response (PDF file):
+        A PDF file containing the plagiarism analysis report.
+
+    Response (JSON - Error):
+        {
+            "message": "Error message describing the issue."
+        }
+
+    Status Codes:
+        200 (OK): plagiarism report PDF successfully generated and sent as file attachment.
+        400 (Bad Request): Invalid request data. Examples:
+            - {"message": "Content is required"}
+            - {"message": "Content length must have at least 200 characters"}
+            - {"message": "Content length must be at least 40 words"}
+        500 (Internal Server Error): An error occurred which was unable to generated response PDF.
+            - {"message": "Unable to generate file"}
+
+    """
     try:
         all_content = request.get_json().get("content")
         if not all_content:
@@ -35,10 +65,30 @@ def check_plagiarism():
         }
 
         response = requests.post(url, json=payload, headers=headers)
-        return response.json()
+
+        if response.status_code != 200:
+            return jsonify({"message": "Plagiarism API request failed"}), 500
+        data = response.json()
+
+        pdf_path = generate_pdf(all_content, data)
+
+        if not os.path.exists(pdf_path):
+            return jsonify({"message": "Unable to generate file"}), 500
+
+        @after_this_request
+        def remove_pdf(response):
+            try:
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                    print(f"File '{pdf_path}' deleted successfully.")
+            except Exception as e:
+                print(f"Error deleting file '{pdf_path}': {e}")
+            return response
+
+        return send_file(pdf_path, as_attachment=True, mimetype="application/pdf")
 
     except Exception as e:
-        return jsonify({"message": "Invalid request"}), 400
+        return jsonify({"message": "Unable to generate file"}), 500
 
 
 if __name__ == "__main__":
