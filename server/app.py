@@ -1,13 +1,27 @@
 from flask import Flask, request, jsonify, send_file, after_this_request  # type: ignore
 from flask_cors import CORS  # type: ignore
 from dotenv import load_dotenv  # type: ignore
+from pymongo import MongoClient  # type: ignore
+from pymongo.errors import ConnectionFailure  # type: ignore
 import os
-from pdf_generator import generate_pdf
+from utils.mongo_utils import save_file_to_mongo  # type: ignore
+from utils.pdf_generator import generate_pdf  # type: ignore
 import requests
+
 
 load_dotenv()
 
 app = Flask(__name__)
+
+try:
+    client = MongoClient(os.getenv("MONGODB_URI"))
+    client.admin.command("ping")
+    print("MongoDB connection successful")
+except ConnectionFailure:
+    print("MongoDB connection failed")
+    exit(1)
+
+db = client["plagiarism_checker"]
 CORS(app)
 
 
@@ -67,12 +81,18 @@ def check_plagiarism():
         response = requests.post(url, json=payload, headers=headers)
 
         if response.status_code != 200:
-            return jsonify({"message": "Plagiarism API request failed"}), 500
+            return jsonify({"message": "Unable to generate file"}), 500
         data = response.json()
 
+        if not data:
+            return jsonify({"message": "Unable to generate file"}), 500
         pdf_path = generate_pdf(all_content, data)
 
         if not os.path.exists(pdf_path):
+            return jsonify({"message": "Unable to generate file"}), 500
+
+        file_id = save_file_to_mongo(pdf_path, db)
+        if not file_id:
             return jsonify({"message": "Unable to generate file"}), 500
 
         @after_this_request
@@ -88,6 +108,7 @@ def check_plagiarism():
         return send_file(pdf_path, as_attachment=True, mimetype="application/pdf")
 
     except Exception as e:
+        print(f"Error: {e}")
         return jsonify({"message": "Unable to generate file"}), 500
 
 
