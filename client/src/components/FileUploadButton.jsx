@@ -1,5 +1,5 @@
 /**
- * Description placeholder
+ * FileUploadButton Component
  *
  * @param {string} props.selectedFileName - The name of the selected file
  * @param {e: React.ChangeEvent<HTMLInputElement> => void} props.handleFileChange - Callback function to handle file change

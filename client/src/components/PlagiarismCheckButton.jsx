@@ -2,7 +2,7 @@ import { LoadingOutlined } from "@ant-design/icons";
 import { Spin } from "antd";
 
 /**
- * Description placeholder
+ *  Button component for checking plagiarism
  *
  * @function PlagiarismCheckButton
  * @param {boolean} props.checkingForPlagiarism - Indicates if the plagiarism check is in progress
