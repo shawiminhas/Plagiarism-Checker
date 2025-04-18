@@ -3,13 +3,24 @@ import { notification } from "antd";
 import mammoth from "mammoth";
 import axios from "axios";
 import PlagiarismCheckButton from "./PlagiarismCheckButton";
-import FileUploader from "./FileUploader";
 import DownloadReportButton from "./DownloadReportButton";
+import FileUploadButton from "./FileUploadButton";
 
+/**
+ * determines if the file extension is valid
+ *
+ * @param {string} fileExtension - The file extension to check
+ * @returns {boolean} - true if the file extension is valid, false otherwise
+ */
 function isValidFileExtension(fileExtension) {
 	return ["doc", "docx", "txt"].includes(fileExtension);
 }
 
+/**
+ * form component for inputting text or uploading a file to check for plagiarism
+ *
+ * @returns {JSX.Element} - The rendered form component
+ */
 export default function InputForm() {
 	const [selectedFileName, setSelectedFileName] = useState("");
 	const [text, setText] = useState("");
@@ -185,7 +196,7 @@ export default function InputForm() {
 					placeholder="Enter text or upload file to check for plagiarism"></textarea>
 				<div className="flex gap-4 m-6 w-full justify-center">
 					<PlagiarismCheckButton checkingForPlagiarism={checkingForPlagiarism} onClick={handleSubmit} />
-					<FileUploader selectedFileName={selectedFileName} handleFileChange={handleFileChange} />
+					<FileUploadButton selectedFileName={selectedFileName} handleFileChange={handleFileChange} />
 				</div>
 				{plagiarismBlob && <DownloadReportButton plagiarismBlob={plagiarismBlob} showNotification={showNotification} />}
 			</form>

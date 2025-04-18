@@ -1,3 +1,8 @@
+/**
+ * Component that renders the header of the application.
+ *
+ * @returns {JSX.Element} - The rendered header component
+ */
 export default function Header() {
 	return (
 		<div className="flex flex-col items-center p-6">

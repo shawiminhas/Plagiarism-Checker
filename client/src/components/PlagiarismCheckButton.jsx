@@ -1,6 +1,15 @@
 import { LoadingOutlined } from "@ant-design/icons";
 import { Spin } from "antd";
 
+/**
+ * Description placeholder
+ *
+ * @function PlagiarismCheckButton
+ * @param {boolean} props.checkingForPlagiarism - Indicates if the plagiarism check is in progress
+ * @param {*} props.onClick - Function to call when the button is clicked
+ * @returns {JSX.Element}
+ */
+
 export default function PlagiarismCheckButton({ checkingForPlagiarism, onClick }) {
 	return (
 		<button

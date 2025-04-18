@@ -1,3 +1,9 @@
+/**
+ * Description placeholder
+ *
+ * @param {Blob} props.plagiarismBlob - The blob object representing the plagiarism report
+ * @returns {JSX.Element} - The rendered download report button component
+ */
 export default function DownloadReportButton({ plagiarismBlob }) {
 	function handleDownload() {
 		try {
